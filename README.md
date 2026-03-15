@@ -1,8 +1,14 @@
 # PokéAgent Challenge: RPG Speedrunning Agent in Pokémon Emerald
 
-![PokéAgent Challenge: RPG Speedrunning Agent in Pokémon Emerald](emerald.png)
+![PokéAgent Challenge: RPG Speedrunning Agent in Pokémon Emerald](layout.png)
+
 
 An AI agent that plays Pokémon Emerald using vision-language models to perceive the game environment, plan actions, and execute gameplay strategies. This is a **starter kit** designed to be easily customizable for different VLMs and agent behaviors.
+
+## Custom PokeAgent Harness
+![Custom PokeAgent Harness](pokeagent_architecture.png)
+Our `PokeAgent`
+
 
 ## Table of Contents
 
@@ -43,13 +49,13 @@ The system uses a **headless server architecture**: the game and emulator run in
 
 The design follows the structure documented in `System-Design/architecture/`:
 
-- **Server** (`server/app.py`): FastAPI server on port 8000. Runs the mGBA emulator, game loop, state caching (100ms for full state, 5s for map data), and exposes REST endpoints (`/action`, `/state`, `/status`, `/screenshot`, `/save_state`, `/load_state`, `/checkpoint`, etc.). WebSocket `/ws/frames` streams frames to the web UI. MCP tool endpoints under `/mcp/*` allow external agents to interact with the game.
+- **Server** (`server/app.py`): FastAPI server on port 8000. Runs the mGBA emulator, game loop, state caching (100ms for full state, 5s for map data), and exposes REST endpoints (`/action`, `/state`, `/status`, `/screenshot`, `/save_state`, `/load_state`, `/checkpoint`, etc.). WebSocket `/ws/frames` streams frames to the web UI. MCP tool endpoints under `/mcp/*` allow external agents to interact with the game. **Ports**: game=8000, frame=8001, mcp=8002.
 - **Clients**:
   - **run.py**: Starts the server as a subprocess, then runs an in-repo agent client (pygame display optional). The client polls `/state`, runs the selected agent scaffold (VLM + logic), and submits actions via `POST /action`.
   - **run_cli.py**: For external CLI agents (e.g., Claude Code). Spawns the game server and an MCP server (`server/cli/pokemon_mcp_server.py`) that translates MCP tool calls into HTTP requests to the game server. The external agent talks to the MCP server over stdio.
-- **VLM layer** (`utils/vlm_backends.py`): `VLM` facade over multiple backends (OpenAI, Anthropic, OpenRouter, Google Gemini, local HuggingFace, etc.). All backends implement `VLMBackend`; the facade handles tool-format conversion per provider.
+- **VLM layer** (`utils/agent_infrastructure/vlm_backends.py`): `VLM` facade over multiple backends (OpenAI, Anthropic, OpenRouter, Google Gemini, local HuggingFace, etc.). All backends implement `VLMBackend`; the facade handles tool-format conversion per provider.
 - **Persistence**: Runtime cache in `.pokeagent_cache/{run_id}/` (checkpoint state, LLM history, `cumulative_metrics.json`, milestones, maps, knowledge base). Backups in `backups/{run_id}/`. Analysis data in `run_data/{run_id}/` (prompt_evolution, end_state, agent_logs). See `System-Design/architecture/data_persistence/persistence.md`.
-- **Metrics**: `LLMLogger` in `utils/llm_logger.py` records LLM interactions and aggregates tokens, cost, and actions into `cumulative_metrics.json`. Step-, milestone-, and objective-level granularity. For external CLI agents (`run_cli`), metrics are derived from JSONL polling and synced via `POST /sync_llm_metrics`. See `System-Design/architecture/metrics/tracking.md`.
+- **Metrics**: `LLMLogger` in `utils/data_persistence/llm_logger.py` records LLM interactions and aggregates tokens, cost, and actions into `cumulative_metrics.json`. Step-, milestone-, and objective-level granularity. For external CLI agents (`run_cli`), metrics are derived from JSONL polling and synced via `POST /sync_llm_metrics`. See `System-Design/architecture/metrics/tracking.md`.
 - **Game infrastructure**: `pokemon_env/emulator.py` (EmeraldEmulator), `pokemon_env/memory_reader.py` (PokemonEmeraldReader), Porymap-based map data. See `System-Design/architecture/pokemon_infrastructure/emerald_data.md`.
 
 For deeper detail and known deviations (e.g., monolithic server, polling-based state), see the markdown files under `System-Design/architecture/`.
@@ -58,14 +64,14 @@ For deeper detail and known deviations (e.g., monolithic server, polling-based s
 
 - **Multiple VLM backends**: OpenAI, OpenRouter, Google Gemini, Anthropic, local HuggingFace (via `utils/vlm_backends.py`)
 - **Vision-based perception**: VLMs analyze game frames and state
-- **Agent scaffolds**: Four-module (perception/planning/memory/action), simple, ReAct, ClaudePlays, GeminiPlays, MyCLIAgent, AutonomousCLI, vision-only
+- **Agent scaffolds**: PokeAgent, vision-only, ReAct, ClaudePlays, GeminiPlays
 - **MCP support**: External CLI agents (e.g., Claude Code) interact via Model Context Protocol
 - **Checkpoints & backups**: Save/resume runs; backups in `backups/`; analysis data in `run_data/`
 - **Metrics & logging**: Per-step and cumulative tokens, cost, actions; LLM logs and session logs
 - **Map system**: Porymap integration, NPC display, movement preview, portal tracking
 - **Web interface**: Real-time stream at `http://localhost:8000/stream`
 - **Video recording**: Optional MP4 recording of gameplay
-- **Customizable prompts**: Edit `agent/system_prompt.py` and module prompts to change behavior
+- **Customizable prompts**: Edit prompt assets under `agents/prompts/`.
 
 ## Directory Structure
 
@@ -77,35 +83,35 @@ pokeagent-speedrun/
 ├── run_cli.py                # Entry for external CLI agents (MCP); spawns server + MCP proxy
 ├── server/
 │   ├── app.py                # FastAPI game server (emulator, /state, /action, /mcp/*, etc.)
-│   ├── client.py             # In-repo client used by run.py (agent loop, optional pygame)
+│   ├── agent_thinking.txt    # Runtime file (gitignored); server writes latest thinking for UI
 │   ├── frame_server.py       # Frame streaming
 │   ├── stream.html           # Web UI for streaming
 │   └── cli/
 │       └── pokemon_mcp_server.py   # MCP proxy: stdio ↔ HTTP to game server
-├── agent/
-│   ├── __init__.py           # Agent factory (scaffold selection)
-│   ├── system_prompt.py      # Main system prompt
-│   ├── my_cli_agent.py       # MyCLIAgent (CLI scaffolding)
-│   ├── my_cli_agent_autonomous.py  # AutonomousCLIAgent (objectives, knowledge base)
-│   ├── react.py              # ReAct agent
-│   ├── claude_plays.py       # ClaudePlaysPokemon
-│   ├── gemini_plays.py       # GeminiPlaysPokemon
-│   ├── vision_only_agent.py  # Vision-only agent
+├── agents/
+│   ├── __init__.py           # Package exports (PokeAgent, VisionOnlyAgent)
+│   ├── PokeAgent.py          # Main benchmark agent
+│   ├── vision_only_agent.py
+│   ├── puzzle_solver.py
+│   ├── utils/                # prompt_optimizer, etc.
 │   ├── objectives/           # Direct objectives, types, categorization
-│   └── deprecated/           # Legacy four-module (perception, planning, memory, action, simple)
+│   └── prompts/              # Canonical prompt assets and path helpers
 ├── utils/
-│   ├── vlm_backends.py       # VLM facade and backends (OpenAI, Gemini, etc.)
-│   ├── state_formatter.py   # Game state formatting for LLM
-│   ├── llm_logger.py        # LLM interaction logging and cumulative metrics
-│   ├── run_data_manager.py  # Cache paths, run_data layout
-│   ├── backup_manager.py    # Checkpoint backups
-│   ├── cli_agent_backends.py # CLI agent backends (e.g., Claude Code)
-│   ├── anticheat.py, ocr_dialogue.py, map_formatter.py, map_stitcher.py, ...
+│   ├── mapping/              # ascii_map_loader, map_formatter, map_stitcher, map_stitcher_singleton,
+│   │                          # pathfinding, pokeemerald_parser, porymap_json_builder, porymap_state
+│   ├── data_persistence/     # backup_manager, run_data_manager, llm_logger
+│   ├── agent_infrastructure/ # cli_agent_backends, vlm_backends
+│   ├── metric_tracking/      # session readers (claude, gemini, codex), server_metrics
+│   ├── state_formatter.py    # Facade; re-exports from utils.mapping.porymap_state
+│   ├── knowledge_base.py     # Shared by agents and server
+│   ├── anticheat.py, coordinate_overlay.py, error_handler.py, json_utils.py, ocr_dialogue.py
 │   └── ...
 ├── pokemon_env/
 │   ├── emulator.py           # EmeraldEmulator (mGBA, input, frame advance)
 │   ├── memory_reader.py      # PokemonEmeraldReader (DO NOT MODIFY for submissions)
 │   ├── emerald_utils.py, enums.py, types.py, utils.py
+│   ├── porymap_paths.py      # Centralized path resolution for porymap data
+│   ├── porymap/              # Pokeemerald decompilation data (data/maps, data/tilesets)
 │   └── ...
 ├── tests/
 │   ├── run_tests.py, states/, ground_truth/, test_*.py
@@ -192,7 +198,7 @@ Auto-detection: `--backend auto` picks a backend based on available keys.
 **run.py** (in-repo agent): Starts the game server, then runs the selected agent client (with optional pygame display).
 
 ```bash
-# Default (my_cli_agent scaffold, Gemini)
+# Default (PokeAgent scaffold, Gemini)
 python run.py
 
 # OpenAI
@@ -209,12 +215,30 @@ python run.py --load-checkpoint
 **run_cli.py** (external CLI agents via MCP): Starts the game server and MCP server; the external agent (e.g., Claude Code) connects via MCP and uses tools to play.
 
 ```bash
-python run_cli.py --cli-type claude --directive path/to/directive.txt
+# Default (OAuth: claude auth login or codex login)
+python run_cli.py --backend claude --directive path/to/directive.txt
+
+# OpenRouter (no interactive login; requires OPENROUTER_API_KEY)
+export OPENROUTER_API_KEY=sk-...
+python run_cli.py --backend claude --api-gateway openrouter --directive path/to/directive.txt
+
+# Gemini (always uses GEMINI_API_KEY)
+python run_cli.py --backend gemini --directive path/to/directive.txt
+
+# Hermes (NousResearch; uses OPENROUTER_API_KEY or HERMES_* env)
+python run_cli.py --backend hermes --api-gateway openrouter --directive path/to/directive.txt
 ```
 
-### Containerized CLI Agent (Recommended)
+| Backend | Auth (default) | Auth (--api-gateway openrouter) |
+|---------|----------------|----------------------------------|
+| claude  | `claude auth login` | `OPENROUTER_API_KEY` |
+| codex   | `codex login`       | `OPENROUTER_API_KEY` |
+| gemini  | `GEMINI_API_KEY`   | (unchanged) |
+| hermes  | `HERMES_*` env vars | `OPENROUTER_API_KEY` |
 
-For security and isolation, it is recommended to run the Claude Code agent in a Docker container. This prevents the agent from modifying files outside the game workspace or accessing your local network.
+### CLI Agent (Containerized)
+
+CLI agents run in Docker containers for security and isolation. This prevents the agent from modifying files outside the game workspace or accessing your local network.
 
 **Prerequisites:**
 1. **Docker**: Ensure Docker Desktop or Docker Engine is installed and running.
@@ -222,16 +246,13 @@ For security and isolation, it is recommended to run the Claude Code agent in a 
    ```bash
    npm install -g @anthropic-ai/claude-code
    ```
-3. **Authentication**: Authenticate with Anthropic on your host machine. The container will mount these credentials.
-   ```bash
-   claude auth login
-   ```
+3. **Authentication**: Either (a) run `claude auth login` on the host (OAuth, default), or (b) set `OPENROUTER_API_KEY` and use `--api-gateway openrouter` (no interactive login).
 
 **1. Build the Container Image**
 Use the `--build` flag with `run_cli.py` to automatically build the image with your user's UID/GID. This ensures files created by the agent are owned by you (not root).
 
 ```bash
-python run_cli.py --cli-type claude --containerized --build --directive agent/prompts/cli_directives/pokemon_directive.md
+python run_cli.py --backend claude --build --directive agents/prompts/cli-agent-directives/pokemon_directive.md
 ```
 
 *Manual Build (Alternative):*
@@ -247,7 +268,7 @@ docker build \
 **2. Run the Agent**
 After building once, you can run without `--build`:
 ```bash
-python run_cli.py --cli-type claude --containerized --directive agent/prompts/cli_directives/pokemon_directive.md
+python run_cli.py --backend claude --directive agents/prompts/cli-agent-directives/pokemon_directive.md
 ```
 
 **How it works:**
@@ -262,14 +283,12 @@ python run_cli.py --cli-type claude --containerized --directive agent/prompts/cl
 
 ## Agent Scaffolds
 
-Choose behavior with `--scaffold` (default: `my_cli_agent`).
+Choose behavior with `--scaffold` (default: `pokeagent`).
 
 | Scaffold          | Description |
 |-------------------|-------------|
-| `my_cli_agent`    | Default. CLI-style agent with frame buffering and game-state tracking. |
-| `autonomous_cli`  | Autonomous agent with objectives and knowledge base. |
-| `fourmodule`      | Perception → Planning → Memory → Action (legacy). |
-| `simple`          | Direct frame + state → VLM → action; faster, no perception/planning/memory. |
+| `pokeagent`       | Default. Main benchmark agent with direct objectives, knowledge, and prompt optimization. |
+| `autonomous_cli`  | Legacy alias for `pokeagent`. |
 | `react`           | ReAct loop: thought → action → observation. |
 | `claudeplays`     | Tool-based (e.g. press_buttons, navigate_to), pathfinding, history summarization. |
 | `geminiplays`     | Gemini-native tool-based agent. |
@@ -278,12 +297,10 @@ Choose behavior with `--scaffold` (default: `my_cli_agent`).
 Examples:
 
 ```bash
-python run.py --scaffold simple --agent-auto
+python run.py --scaffold pokeagent --agent-auto
 python run.py --scaffold react --agent-auto
 python run.py --scaffold claudeplays --backend openai --model-name gpt-4o --agent-auto
 ```
-
-Deprecated: `--simple` still maps to `--scaffold simple` but triggers a deprecation warning.
 
 ## Command Line Options
 
@@ -293,18 +310,20 @@ run.py:
   --backend (openai|gemini|local|openrouter|anthropic|auto), --model-name TEXT
   --port INT (default 8000)
   --headless, --agent-auto, --manual
-  --record, --scaffold (fourmodule|simple|react|claudeplays|geminiplays|my_cli_agent|autonomous_cli|vision_only)
+  --record, --scaffold (pokeagent|autonomous_cli|react|claudeplays|geminiplays|vision_only)
   --no-ocr (disable OCR dialogue detection)
-  --simple (deprecated; use --scaffold simple)
+
+run_cli.py:
+  --backend (claude|gemini|codex|hermes), --api-gateway (login|openrouter, default: login)
+  --directive PATH, --login, --build
+  --port INT, --load-state PATH, --termination-condition, --termination-threshold
 ```
 
 ## Customizing Agent Behavior (Prompt Editing Guide)
 
-- **System prompt**: `agent/system_prompt.py` — overall role and behavior.
-- **Perception**: `agent/deprecated/perception.py` — how the agent interprets the screen (fourmodule).
-- **Planning**: `agent/deprecated/planning.py` — high-level strategy (fourmodule).
-- **Memory**: `agent/deprecated/memory.py` — what to remember (fourmodule).
-- **Action**: `agent/deprecated/action.py` — button decisions (fourmodule).
+- **Prompt files**: `agents/prompts/` holds `pokeagent-directives/` and `cli-agent-directives/`; paths are repo-root-relative.
+- **Main benchmark agent**: `agents/PokeAgent.py`.
+- **Vision-only variant**: `agents/vision_only_agent.py`.
 
 Edit the prompts in those files and restart the agent. Use `--debug-state` for detailed state in logs. For Nuzlocke-style behavior, change the system prompt and action/memory logic accordingly.
 
@@ -323,7 +342,7 @@ Edit the prompts in those files and restart the agent. Use `--debug-state` for d
 
 ## Fair Use and Modification Guidelines
 
-**Allowed:** Changing agent behavior (prompts, planning, memory), adding or changing VLM backends in `utils/vlm_backends.py`, improving logging, tests, docs, performance, UI, and utilities.
+**Allowed:** Changing agent behavior (prompts, planning, memory), adding or changing VLM backends in `utils/agent_infrastructure/vlm_backends.py`, improving logging, tests, docs, performance, UI, and utilities.
 
 **Not allowed (for competitive submissions):** Modifying `pokemon_env/memory_reader.py` or memory-reading logic, changing how game state is extracted, altering emulator core or anti-cheat, or manipulating game memory outside normal button input.
 
