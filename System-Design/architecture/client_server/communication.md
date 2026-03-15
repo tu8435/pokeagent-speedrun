@@ -22,7 +22,7 @@ The system follows a headless server architecture where the game logic and emula
 ### MCP Protocol (Model Context Protocol)
 - **Purpose**: Enables standard CLI agents (like Anthropic's Claude Code or other MCP-compliant tools) to interact with the game server.
 - **Implementation**:
-  - `run_cli.py` acts as the MCP client/host.
+  - `run_cli.py` acts as the MCP client/host. Backend selection: `--backend {claude,gemini,codex}`.
   - `server/cli/pokemon_mcp_server.py` acts as a thin proxy layer.
   - **Proxy Pattern**: The MCP server does not contain game logic. It translates MCP tool calls into HTTP POST requests to the main game server.
   - **Transport**: Stdio (standard input/output) communication between the agent and the MCP server process.
@@ -36,12 +36,15 @@ The system follows a headless server architecture where the game logic and emula
 - `GET /health`: Health check endpoint.
 - `GET /screenshot`: Retrieve the current frame as an image.
 
+### Agent thinking (UI)
+- Agent thinking for the stream UI is driven by the LLM log (session log file) and optional `POST /thinking`; the server does not rely on a single static file for live thinking.
+
 ### MCP Tool Endpoints
-The server exposes ~23 specific endpoints under `/mcp/*` that map directly to agent tools:
+The server exposes endpoints under `/mcp/*` that map to agent tools:
 - **Game Interaction**: `/mcp/get_game_state`, `/mcp/press_buttons`, `/mcp/navigate_to`.
 - **Knowledge & Wiki**: `/mcp/add_knowledge`, `/mcp/search_knowledge`, `/mcp/lookup_pokemon_info`.
 - **Objectives**: `/mcp/complete_direct_objective`, `/mcp/create_direct_objectives`.
-- **System**: `/mcp/read_file`, `/mcp/run_shell_command`, `/mcp/save_memory`.
+- **Memory**: `/mcp/save_memory` (writes to run directory AGENT.md).
 
 ### State Management
 - `POST /save_state`: Save emulator state (Protected by API Key).
