@@ -35,6 +35,12 @@ from utils.data_persistence.llm_logger import get_llm_logger
 from utils.agent_infrastructure.vlm_backends import VLM
 from utils.data_persistence.run_data_manager import get_run_data_manager, initialize_run_data_manager
 from agents.utils.prompt_optimizer import create_prompt_optimizer
+from agents.utils.optimization_config import (
+    OptimizationConfig,
+    build_optimization_config,
+    load_optimization_config_file,
+    parse_optimization_config_string,
+)
 from agents.subagents import (
     DEFAULT_TRAJECTORY_WINDOW,
     DEFAULT_SUMMARY_WINDOW,
@@ -179,8 +185,9 @@ class PokeAgent:
         system_instructions_file: str = None,  # Will be set based on optimization flag
         max_context_chars: int = 100000,
         target_context_chars: int = 50000,
-        enable_prompt_optimization: bool = False,
-        optimization_frequency: int = 10,
+        optimization_config: Optional[OptimizationConfig | Dict[str, Any]] = None,
+        enable_prompt_optimization: Optional[bool] = None,
+        optimization_frequency: Optional[int] = None,
         scaffold: str = "pokeagent",
     ):
         logger.info(f"🚀 Initializing PokeAgent with backend={backend}, model={model}, server={server_url}, scaffold={scaffold}")
@@ -191,10 +198,31 @@ class PokeAgent:
         self.step_count = 0
         self.max_context_chars = max_context_chars
         self.target_context_chars = target_context_chars
-        self.optimization_enabled = enable_prompt_optimization
-        self.optimization_frequency = optimization_frequency
         self.scaffold = scaffold
         self.include_builtins = scaffold not in _NO_BUILTINS_SCAFFOLDS
+
+        explicit_config_data = optimization_config if isinstance(optimization_config, dict) else None
+        explicit_config_obj = optimization_config if isinstance(optimization_config, OptimizationConfig) else None
+        if enable_prompt_optimization is not None or optimization_frequency is not None:
+            logger.warning(
+                "Deprecated optimization constructor args used. Prefer optimization_config=OptimizationConfig(...)."
+            )
+
+        self.optimization_config = explicit_config_obj or build_optimization_config(
+            scaffold=self.scaffold,
+            config_data=explicit_config_data,
+            legacy_enable_prompt_optimization=enable_prompt_optimization,
+            legacy_optimization_frequency=optimization_frequency,
+        )
+        if self.scaffold != "autoevolve" and self.optimization_config.has_non_prompt_passes():
+            logger.warning(
+                "Non-prompt evolve passes are only supported in scaffold='autoevolve'; "
+                "disabling subagent/skill/memory evolve passes."
+            )
+            self.optimization_config = self.optimization_config.with_non_prompt_passes_disabled()
+
+        self.optimization_enabled = self.optimization_config.any_enabled()
+        self.optimization_frequency = self.optimization_config.optimization_frequency
 
         # Conversation history for tracking and compaction
         self.conversation_history = []
@@ -277,16 +305,23 @@ class PokeAgent:
                     run_data_manager=run_manager,
                     base_prompt_path=POKEAGENT_BASE_PROMPT_PATH,
                     system_prompt_path=AUTOEVOLVE_BASE_SYSTEM_PROMPT_PATH,
+                    optimization_config=self.optimization_config,
                 )
                 self.prompt_optimizer = self.harness_evolver.prompt_optimizer
-                logger.info(f"🧬 HarnessEvolver ENABLED (frequency: every {optimization_frequency} steps)")
+                logger.info(
+                    "🧬 HarnessEvolver ENABLED (config=%s)",
+                    self.optimization_config.to_dict(),
+                )
             else:
                 self.prompt_optimizer = create_prompt_optimizer(
                     vlm=self.vlm,
                     run_data_manager=run_manager,
                     base_prompt_path=POKEAGENT_BASE_PROMPT_PATH,
                 )
-                logger.info(f"🔄 Prompt optimization ENABLED (frequency: every {optimization_frequency} steps)")
+                logger.info(
+                    "🔄 Prompt optimization ENABLED (config=%s)",
+                    self.optimization_config.to_dict(),
+                )
 
     def _load_system_instructions(self, filename: str) -> str:
         """Load system instructions from file."""
@@ -2185,24 +2220,27 @@ class PokeAgent:
                 # Check if harness evolution or prompt optimization should run
                 if self.optimization_enabled:
                     if self.harness_evolver:
-                        if self.harness_evolver.should_evolve(active_step, self.optimization_frequency):
+                        if self.harness_evolver.should_evolve(active_step):
                             logger.info(f"🧬 Triggering harness evolution at step {active_step}")
                             try:
                                 results = self.harness_evolver.evolve(
                                     current_step=active_step,
-                                    num_trajectory_steps=self.optimization_frequency,
+                                    num_trajectory_steps=self.optimization_config.resolved_trajectory_window_steps(),
                                 )
                                 logger.info(f"✅ Harness evolved at step {active_step}: {results}")
                                 self._inject_evolution_summary(results)
                             except Exception as e:
                                 logger.error(f"❌ Harness evolution failed: {e}", exc_info=True)
                     elif self.prompt_optimizer:
-                        if self.prompt_optimizer.should_optimize(active_step, self.optimization_frequency):
+                        if self.prompt_optimizer.should_optimize(
+                            active_step,
+                            self.optimization_config.optimization_frequency,
+                        ):
                             logger.info(f"🔄 Triggering prompt optimization at step {active_step}")
                             try:
                                 new_base_prompt = self.prompt_optimizer.optimize_prompt(
                                     current_step=active_step,
-                                    num_trajectory_steps=self.optimization_frequency
+                                    num_trajectory_steps=self.optimization_config.resolved_trajectory_window_steps()
                                 )
                                 logger.info(f"✅ Base prompt optimized (new length: {len(new_base_prompt)} chars)")
                             except Exception as e:
@@ -2246,24 +2284,27 @@ class PokeAgent:
                 # Check if harness evolution or prompt optimization should run
                 if self.optimization_enabled:
                     if self.harness_evolver:
-                        if self.harness_evolver.should_evolve(active_step, self.optimization_frequency):
+                        if self.harness_evolver.should_evolve(active_step):
                             logger.info(f"🧬 Triggering harness evolution at step {active_step}")
                             try:
                                 results = self.harness_evolver.evolve(
                                     current_step=active_step,
-                                    num_trajectory_steps=self.optimization_frequency,
+                                    num_trajectory_steps=self.optimization_config.resolved_trajectory_window_steps(),
                                 )
                                 logger.info(f"✅ Harness evolved at step {active_step}: {results}")
                                 self._inject_evolution_summary(results)
                             except Exception as e:
                                 logger.error(f"❌ Harness evolution failed: {e}", exc_info=True)
                     elif self.prompt_optimizer:
-                        if self.prompt_optimizer.should_optimize(active_step, self.optimization_frequency):
+                        if self.prompt_optimizer.should_optimize(
+                            active_step,
+                            self.optimization_config.optimization_frequency,
+                        ):
                             logger.info(f"🔄 Triggering prompt optimization at step {active_step}")
                             try:
                                 new_base_prompt = self.prompt_optimizer.optimize_prompt(
                                     current_step=active_step,
-                                    num_trajectory_steps=self.optimization_frequency
+                                    num_trajectory_steps=self.optimization_config.resolved_trajectory_window_steps()
                                 )
                                 logger.info(f"✅ Base prompt optimized (new length: {len(new_base_prompt)} chars)")
                             except Exception as e:
@@ -3407,22 +3448,46 @@ def main():
         help=(
             "Repo-relative path to system instructions markdown. "
             "Omit for automatic selection: POKEAGENT.md by default, or system_prompt.md when "
-            "--enable-prompt-optimization is set (fails at startup if run_data_manager is missing)."
+            "optimization config is enabled (fails at startup if run_data_manager is missing)."
         ),
     )
     parser.add_argument(
-        "--enable-prompt-optimization",
-        action="store_true",
-        help=(
-            "Lean system prompt + optimizable base prompt. Requires initialized run_data_manager "
-            "(e.g. via run.py); otherwise construction raises RuntimeError."
-        ),
+        "--optimization-config",
+        type=str,
+        default=None,
+        help="JSON object for optimization config.",
+    )
+    parser.add_argument(
+        "--optimization-config-file",
+        type=str,
+        default=None,
+        help="Path to JSON file containing optimization config.",
     )
     parser.add_argument(
         "--optimization-frequency",
         type=int,
-        default=10,
-        help="Run prompt optimization every N steps when optimization is enabled.",
+        default=None,
+        help="Override optimization frequency in optimization config.",
+    )
+    parser.add_argument(
+        "--trajectory-window-steps",
+        type=int,
+        default=None,
+        help="Override trajectory window size in optimization config.",
+    )
+    parser.add_argument(
+        "--enable-prompt-optimization",
+        action="store_true",
+        default=None,
+        help=(
+            "DEPRECATED: use --optimization-config. Maps to optimization config scaffold defaults."
+        ),
+    )
+    parser.add_argument(
+        "--legacy-optimization-frequency",
+        type=int,
+        default=None,
+        help="DEPRECATED: use --optimization-frequency with --optimization-config.",
     )
     parser.add_argument(
         "--backend",
@@ -3433,13 +3498,30 @@ def main():
 
     args = parser.parse_args()
 
+    config_data: Dict[str, Any] = {}
+    if args.optimization_config_file:
+        config_data.update(load_optimization_config_file(args.optimization_config_file))
+    if args.optimization_config:
+        config_data.update(parse_optimization_config_string(args.optimization_config))
+
+    convenience_overrides: Dict[str, Any] = {}
+    if args.optimization_frequency is not None:
+        convenience_overrides["optimization_frequency"] = args.optimization_frequency
+    if args.trajectory_window_steps is not None:
+        convenience_overrides["trajectory_window_steps"] = args.trajectory_window_steps
+
     agent_kwargs = {
         "server_url": args.server_url,
         "model": args.model,
         "backend": args.backend,
         "max_steps": args.max_steps,
-        "enable_prompt_optimization": args.enable_prompt_optimization,
-        "optimization_frequency": args.optimization_frequency,
+        "optimization_config": build_optimization_config(
+            scaffold="pokeagent",
+            config_data=config_data or None,
+            convenience_overrides=convenience_overrides or None,
+            legacy_enable_prompt_optimization=args.enable_prompt_optimization,
+            legacy_optimization_frequency=args.legacy_optimization_frequency,
+        ),
     }
     if args.system_instructions is not None:
         agent_kwargs["system_instructions_file"] = args.system_instructions

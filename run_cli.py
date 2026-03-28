@@ -893,39 +893,91 @@ def main():
     parser = argparse.ArgumentParser(
         description="Run external CLI agents (Claude Code, Codex) for Pokemon Emerald experiments"
     )
-    parser.add_argument("--backend", type=str, default="claude", choices=["claude", "gemini", "codex", "hermes"],
-                       help="Backend to use for the CLI agent (default: claude)")
-    parser.add_argument("--api-gateway", type=str, default="login", choices=["login", "openrouter"],
-                       help="Auth gateway: 'login' (OAuth/subscription, default) or 'openrouter' (requires OPENROUTER_API_KEY)")
-    parser.add_argument("--login", action="store_true",
-                       help="Run backend-specific auth login before starting (e.g. 'claude auth login')")
-    parser.add_argument("--directive", type=str,
-                       default=CLI_AGENT_DIRECTIVE_PATH,
-                       help="Path to system prompt/directive file for CLI agent")
-    parser.add_argument("--port", type=int, default=8000, help="Port for the game server (default: 8000)")
-    parser.add_argument("--load-state", type=str, help="Load a saved state file on startup")
-    parser.add_argument("--load-checkpoint", action="store_true", help="Load from checkpoint files")
-    parser.add_argument("--backup-state", type=str,
-                       help="Load from a backup zip file (extracts into run cache and auto-enables --load-checkpoint).")
-    parser.add_argument("--termination-condition", type=str, default="gym_badge_count",
-                       help="Termination condition type (default: gym_badge_count)")
-    parser.add_argument("--termination-threshold", type=int, default=1,
-                       help="Threshold for termination condition (default: 1 for first badge)")
-    parser.add_argument("--poll-interval", type=int, default=10,
-                       help="Seconds between termination condition polls (default: 10)")
-    parser.add_argument("--graceful-timeout", type=int, default=30,
-                       help="Graceful shutdown timeout in seconds before force kill (default: 30)")
-    parser.add_argument("--record", action="store_true", help="Record video of the gameplay")
-    parser.add_argument("--no-ocr", action="store_true", default=True, help="Disable OCR dialogue detection")
-    parser.add_argument("--direct-objectives", type=str, help="Load a specific direct objective sequence")
-    parser.add_argument("--direct-objectives-start", type=int, default=0, help="Start index for direct objectives")
-    parser.add_argument("--run-name", type=str, default=None, help="Optional name for the run directory")
-    parser.add_argument("--build", action="store_true",
-                       help="Build the container image before running")
-    parser.add_argument("--mcp-sse-port", type=int, default=None,
-                       help="Port for MCP SSE server (default: game_port + 2)")
-    parser.add_argument("--agent-thinking-effort", type=str, choices=["low", "medium", "high"],
-                       help="Thinking effort level for CLI agent (low/medium/high)")
+
+    backend_group = parser.add_argument_group("Backend and auth")
+    backend_group.add_argument(
+        "--backend",
+        type=str,
+        default="claude",
+        choices=["claude", "gemini", "codex", "hermes"],
+        help="Backend to use for the CLI agent (default: claude)",
+    )
+    backend_group.add_argument(
+        "--api-gateway",
+        type=str,
+        default="login",
+        choices=["login", "openrouter"],
+        help="Auth gateway: 'login' (OAuth/subscription, default) or 'openrouter' (requires OPENROUTER_API_KEY)",
+    )
+    backend_group.add_argument(
+        "--login",
+        action="store_true",
+        help="Run backend-specific auth login before starting (e.g. 'claude auth login')",
+    )
+    backend_group.add_argument(
+        "--directive",
+        type=str,
+        default=CLI_AGENT_DIRECTIVE_PATH,
+        help="Path to system prompt/directive file for CLI agent",
+    )
+    backend_group.add_argument(
+        "--agent-thinking-effort",
+        type=str,
+        choices=["low", "medium", "high"],
+        help="Thinking effort level for CLI agent (low/medium/high)",
+    )
+
+    server_group = parser.add_argument_group("Server and state")
+    server_group.add_argument("--port", type=int, default=8000, help="Port for the game server (default: 8000)")
+    server_group.add_argument("--load-state", type=str, help="Load a saved state file on startup")
+    server_group.add_argument("--load-checkpoint", action="store_true", help="Load from checkpoint files")
+    server_group.add_argument(
+        "--backup-state",
+        type=str,
+        help="Load from a backup zip file (extracts into run cache and auto-enables --load-checkpoint).",
+    )
+    server_group.add_argument(
+        "--mcp-sse-port",
+        type=int,
+        default=None,
+        help="Port for MCP SSE server (default: game_port + 2)",
+    )
+
+    termination_group = parser.add_argument_group("Termination")
+    termination_group.add_argument(
+        "--termination-condition",
+        type=str,
+        default="gym_badge_count",
+        help="Termination condition type (default: gym_badge_count)",
+    )
+    termination_group.add_argument(
+        "--termination-threshold",
+        type=int,
+        default=1,
+        help="Threshold for termination condition (default: 1 for first badge)",
+    )
+    termination_group.add_argument(
+        "--poll-interval",
+        type=int,
+        default=10,
+        help="Seconds between termination condition polls (default: 10)",
+    )
+    termination_group.add_argument(
+        "--graceful-timeout",
+        type=int,
+        default=30,
+        help="Graceful shutdown timeout in seconds before force kill (default: 30)",
+    )
+
+    objective_group = parser.add_argument_group("Objectives and run metadata")
+    objective_group.add_argument("--direct-objectives", type=str, help="Load a specific direct objective sequence")
+    objective_group.add_argument("--direct-objectives-start", type=int, default=0, help="Start index for direct objectives")
+    objective_group.add_argument("--run-name", type=str, default=None, help="Optional name for the run directory")
+
+    runtime_group = parser.add_argument_group("Runtime options")
+    runtime_group.add_argument("--record", action="store_true", help="Record video of the gameplay")
+    runtime_group.add_argument("--no-ocr", action="store_true", default=True, help="Disable OCR dialogue detection")
+    runtime_group.add_argument("--build", action="store_true", help="Build the container image before running")
 
     args = parser.parse_args()
 

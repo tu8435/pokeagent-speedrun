@@ -18,6 +18,7 @@ from agents.prompts.paths import (
     POKEAGENT_BASE_PROMPT_PATH,
     resolve_repo_path,
 )
+from agents.utils.optimization_config import OptimizationConfig, scaffold_optimization_defaults
 from agents.utils.prompt_optimizer import PromptOptimizer
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class HarnessEvolver:
         run_data_manager,
         base_prompt_path: str = POKEAGENT_BASE_PROMPT_PATH,
         system_prompt_path: str = AUTOEVOLVE_BASE_SYSTEM_PROMPT_PATH,
+        optimization_config: Optional[OptimizationConfig] = None,
     ):
         # Compose the existing PromptOptimizer for prompt-level evolution
         self.prompt_optimizer = PromptOptimizer(
@@ -66,6 +68,7 @@ class HarnessEvolver:
         # Reuse the text-only VLM created by the optimizer
         self.text_vlm = self.prompt_optimizer.vlm
         self.run_manager = run_data_manager
+        self.optimization_config = optimization_config or scaffold_optimization_defaults("autoevolve")
 
         self.generation = 0
         self.evolution_log: List[Dict[str, Any]] = []
@@ -95,13 +98,12 @@ class HarnessEvolver:
     # Public API
     # ------------------------------------------------------------------
 
-    def should_evolve(self, current_step: int, frequency: int) -> bool:
+    def should_evolve(self, current_step: int) -> bool:
         """Return True if evolution should fire at this step.
 
         Uses adaptive frequency: evolve more often early (every 25 steps
         for the first 200 steps) to bootstrap the harness quickly, then
         back off to every 100 steps once capabilities stabilize.
-        The caller's ``frequency`` arg is ignored in favor of the adaptive schedule.
         """
         if current_step < MIN_WARMUP_STEPS or current_step <= 0:
             return False
@@ -209,16 +211,32 @@ class HarnessEvolver:
             self.generation, current_step,
         )
 
-        trajectories = self.prompt_optimizer.get_recent_trajectories(num_trajectory_steps)
-        if not trajectories:
-            logger.warning("No trajectories — skipping evolution")
-            return {"skipped": True, "reason": "no_trajectories"}
+        cfg = self.optimization_config
+        pass_enabled = {
+            "prompt": cfg.enable_prompt_evolve,
+            "subagents": cfg.enable_subagent_evolve,
+            "skills": cfg.enable_skill_evolve,
+            "memory": cfg.enable_memory_evolve,
+        }
+        if not any(pass_enabled.values()):
+            return {"skipped": True, "reason": "all_passes_disabled"}
 
-        # Compute current skill stats for before/after comparison
-        current_stats = self._compute_skill_stats(trajectories)
-
-        # Auto-revert skills that got worse after the last evolution
-        reverted = self._auto_revert_degraded_skills(current_stats)
+        needs_trajectory_context = (
+            pass_enabled["subagents"] or pass_enabled["skills"] or pass_enabled["memory"]
+        )
+        trajectories: List[Dict[str, Any]] = []
+        current_stats: Dict[str, Dict[str, int]] = {}
+        reverted: List[str] = []
+        if needs_trajectory_context:
+            trajectories = self.prompt_optimizer.get_recent_trajectories(num_trajectory_steps)
+            if not trajectories:
+                logger.warning("No trajectories — skipping evolution")
+                return {"skipped": True, "reason": "no_trajectories"}
+            if pass_enabled["skills"]:
+                # Compute current skill stats for before/after comparison
+                current_stats = self._compute_skill_stats(trajectories)
+                # Auto-revert skills that got worse after the last evolution
+                reverted = self._auto_revert_degraded_skills(current_stats)
 
         results: Dict[str, Any] = {}
         if reverted:
@@ -231,6 +249,9 @@ class HarnessEvolver:
             ("skills", lambda: self._evolve_skills(trajectories, current_step)),
             ("memory", lambda: self._evolve_memory(trajectories, current_step)),
         ]:
+            if not pass_enabled[name]:
+                results[name] = {"skipped": True, "reason": "disabled_by_config"}
+                continue
             try:
                 results[name] = fn()
             except Exception as e:
@@ -238,7 +259,8 @@ class HarnessEvolver:
                 results[name] = {"error": str(e)}
 
         # Save stats for next evolution's before/after comparison
-        self._prev_skill_stats = current_stats
+        if pass_enabled["skills"]:
+            self._prev_skill_stats = current_stats
         changes = []
         for pass_name in ["subagents", "skills", "memory"]:
             data = results.get(pass_name, {})
@@ -785,6 +807,13 @@ def create_harness_evolver(
     run_data_manager,
     base_prompt_path: str = POKEAGENT_BASE_PROMPT_PATH,
     system_prompt_path: str = AUTOEVOLVE_BASE_SYSTEM_PROMPT_PATH,
+    optimization_config: Optional[OptimizationConfig] = None,
 ) -> HarnessEvolver:
     """Factory function to create a HarnessEvolver instance."""
-    return HarnessEvolver(vlm, run_data_manager, base_prompt_path, system_prompt_path)
+    return HarnessEvolver(
+        vlm,
+        run_data_manager,
+        base_prompt_path,
+        system_prompt_path,
+        optimization_config=optimization_config,
+    )

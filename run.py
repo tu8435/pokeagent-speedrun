@@ -10,6 +10,7 @@ import time
 import argparse
 import subprocess
 import signal
+from typing import Dict, Any
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -99,6 +100,60 @@ SCAFFOLD_DESCRIPTIONS = {
 SUPPORTED_SCAFFOLDS = list(CUSTOM_AGENT_CONFIGS.keys())
 
 SERVER_MANAGED_SCAFFOLDS = list(CUSTOM_AGENT_CONFIGS.keys())
+
+
+def _add_bool_override_flags(group: argparse._ArgumentGroup, option_stem: str, help_text: str):
+    """Add paired --enable/--disable boolean override flags with tri-state output."""
+    dest = option_stem.replace("-", "_")
+    group.set_defaults(**{dest: None})
+    group.add_argument(f"--enable-{option_stem}", dest=dest, action="store_true", help=help_text)
+    group.add_argument(f"--disable-{option_stem}", dest=dest, action="store_false", help=f"Disable {help_text.lower()}")
+
+
+def _build_optimization_config_from_args(args) -> Any:
+    """Build OptimizationConfig from structured and deprecated CLI inputs."""
+    from agents.utils.optimization_config import (
+        build_optimization_config,
+        parse_optimization_config_string,
+        load_optimization_config_file,
+    )
+
+    config_data: Dict[str, Any] = {}
+    if args.optimization_config_file:
+        config_data.update(load_optimization_config_file(args.optimization_config_file))
+    if args.optimization_config:
+        config_data.update(parse_optimization_config_string(args.optimization_config))
+
+    overrides: Dict[str, Any] = {}
+    for key in (
+        "enable_prompt_evolve",
+        "enable_subagent_evolve",
+        "enable_skill_evolve",
+        "enable_memory_evolve",
+        "optimization_frequency",
+        "trajectory_window_steps",
+    ):
+        value = getattr(args, key, None)
+        if value is not None:
+            overrides[key] = value
+
+    legacy_enable = args.enable_prompt_optimization
+    legacy_frequency = args.legacy_optimization_frequency
+
+    if legacy_enable is not None or legacy_frequency is not None:
+        print(
+            "⚠️  Deprecated optimization flags detected. Prefer "
+            "--optimization-config / --optimization-config-file and pass-level overrides.",
+            flush=True,
+        )
+
+    return build_optimization_config(
+        scaffold=args.scaffold,
+        config_data=config_data or None,
+        convenience_overrides=overrides or None,
+        legacy_enable_prompt_optimization=legacy_enable,
+        legacy_optimization_frequency=legacy_frequency,
+    )
 
 
 def start_server(args, run_id=None):
@@ -248,14 +303,10 @@ def start_custom_agent(agent_config, args):
     if agent_config.get('supports_slam', False):
         agent_kwargs["allow_slam"] = args.allow_slam if hasattr(args, 'allow_slam') else False
 
-    # Add prompt optimization if specified in config
-    if agent_config.get('supports_prompt_optimization', False):
-        agent_kwargs["enable_prompt_optimization"] = args.enable_prompt_optimization if hasattr(args, 'enable_prompt_optimization') else False
-        agent_kwargs["optimization_frequency"] = args.optimization_frequency if hasattr(args, 'optimization_frequency') else 10
-
     # Pass scaffold name to PokeAgent so it can select tool set and prompt
     if agent_config.get("class") == "PokeAgent":
         agent_kwargs["scaffold"] = args.scaffold
+        agent_kwargs["optimization_config"] = args.optimization_config_obj
 
     agent = agent_class(**agent_kwargs)
     print("✅ Agent created", flush=True)
@@ -299,32 +350,105 @@ def main():
                        help="Start in manual mode instead of agent mode")
     
     # Features
-    parser.add_argument("--record", action="store_true", 
-                       help="Record video of the gameplay")
-    parser.add_argument("--no-ocr", action="store_true", default=True,
-                       help="Disable OCR dialogue detection")
-    parser.add_argument("--direct-objectives", type=str,
-                       help="Load a specific direct objective sequence ('categorized_full_game' or 'autonomous_objective_creation')")
-    parser.add_argument("--direct-objectives-start", type=int, default=0,
-                       help="Start index for story objectives in legacy mode, or story objectives in categorized mode")
-    parser.add_argument("--direct-objectives-battling-start", type=int, default=0,
-                       help="Start index for battling objectives (only used in categorized mode)")
-    parser.add_argument("--clear-memory", action="store_true",
-                       help="Clear the memory.json file before starting the run")
-    parser.add_argument("--clear-knowledge-base", action="store_true",
-                       dest="clear_memory",
-                       help="Deprecated alias for --clear-memory")
-    parser.add_argument("--run-name", type=str, default=None,
-                       help="Optional name to append to run directory (e.g., 'test_run' -> 'run_20251129_191503_test_run')")
-    parser.add_argument("--enable-prompt-optimization", action="store_true",
-                       help="Enable reflective prompt optimization based on trajectory analysis")
-    parser.add_argument("--optimization-frequency", type=int, default=10,
-                       help="How often to run prompt optimization (default: every 10 steps)")
-    parser.add_argument("--allow-walkthrough", action="store_true",
-                       help="Enable get_walkthrough tool for vision_only agent")
-    parser.add_argument("--allow-slam", action="store_true",
-                       help="Enable SLAM (map building) for vision_only agent")
+    parser.add_argument("--record", action="store_true", help="Record video of the gameplay")
+    parser.add_argument("--no-ocr", action="store_true", default=True, help="Disable OCR dialogue detection")
+    parser.add_argument(
+        "--direct-objectives",
+        type=str,
+        help="Load a specific direct objective sequence ('categorized_full_game' or 'autonomous_objective_creation')",
+    )
+    parser.add_argument(
+        "--direct-objectives-start",
+        type=int,
+        default=0,
+        help="Start index for story objectives in legacy mode, or story objectives in categorized mode",
+    )
+    parser.add_argument(
+        "--direct-objectives-battling-start",
+        type=int,
+        default=0,
+        help="Start index for battling objectives (only used in categorized mode)",
+    )
+    parser.add_argument("--clear-memory", action="store_true", help="Clear the memory.json file before starting the run")
+    parser.add_argument(
+        "--clear-knowledge-base",
+        action="store_true",
+        dest="clear_memory",
+        help="Deprecated alias for --clear-memory",
+    )
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="Optional name to append to run directory (e.g., 'test_run' -> 'run_20251129_191503_test_run')",
+    )
+    parser.add_argument("--allow-walkthrough", action="store_true", help="Enable get_walkthrough tool for vision_only agent")
+    parser.add_argument("--allow-slam", action="store_true", help="Enable SLAM (map building) for vision_only agent")
+
+    optimization_group = parser.add_argument_group("Optimization config")
+    optimization_group.add_argument(
+        "--optimization-config",
+        type=str,
+        help="JSON object for optimization config (e.g. '{\"enable_prompt_evolve\": true}')",
+    )
+    optimization_group.add_argument(
+        "--optimization-config-file",
+        type=str,
+        help="Path to JSON file containing optimization config",
+    )
+    optimization_group.add_argument(
+        "--optimization-frequency",
+        dest="optimization_frequency",
+        type=int,
+        default=None,
+        help="Override optimization frequency in the structured optimization config",
+    )
+    optimization_group.add_argument(
+        "--trajectory-window-steps",
+        type=int,
+        default=None,
+        help="Override number of recent trajectory steps used during optimization/evolution",
+    )
+    _add_bool_override_flags(
+        optimization_group,
+        "prompt-evolve",
+        "Enable prompt evolution pass override",
+    )
+    _add_bool_override_flags(
+        optimization_group,
+        "subagent-evolve",
+        "Enable subagent evolution pass override",
+    )
+    _add_bool_override_flags(
+        optimization_group,
+        "skill-evolve",
+        "Enable skill evolution pass override",
+    )
+    _add_bool_override_flags(
+        optimization_group,
+        "memory-evolve",
+        "Enable memory evolution pass override",
+    )
+
+    deprecated_group = parser.add_argument_group("Deprecated optimization flags")
+    deprecated_group.add_argument(
+        "--enable-prompt-optimization",
+        action="store_true",
+        default=None,
+        help="DEPRECATED: use --optimization-config with enable_*_evolve keys instead",
+    )
+    deprecated_group.add_argument(
+        "--legacy-optimization-frequency",
+        type=int,
+        default=None,
+        help="DEPRECATED: use --optimization-frequency override or config key",
+    )
     args = parser.parse_args()
+
+    try:
+        args.optimization_config_obj = _build_optimization_config_from_args(args)
+    except Exception as e:
+        parser.error(f"Invalid optimization config: {e}")
     
     print("=" * 60)
     print("🎮 Pokemon Emerald AI Agent")
