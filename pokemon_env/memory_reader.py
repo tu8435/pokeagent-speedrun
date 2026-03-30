@@ -143,6 +143,10 @@ class MemoryAddresses:
     
     # Save block addresses for flags
     SAVE_BLOCK1_FLAGS_OFFSET = 0x1270  # Approximate offset for flags in SaveBlock1
+    SAVE_BLOCK1_VARS_OFFSET = 0x139C
+    SAVE_BLOCK1_VARS_COUNT = 256
+    VARS_START = 0x4000
+    VARS_END = 0x40FF
 
 @dataclass
 class PokemonDataStructure:
@@ -3774,6 +3778,28 @@ class PokemonEmeraldReader:
         except Exception as e:
             logger.warning(f"Failed to read flags: {e}")
             return {}
+
+    def read_var(self, var_id: int) -> Optional[int]:
+        """Read a normal script var (0x4000-0x40FF) from SaveBlock1 vars array."""
+        try:
+            if not (self.addresses.VARS_START <= var_id <= self.addresses.VARS_END):
+                logger.debug("read_var(%s) ignored: outside normal var range", hex(var_id))
+                return None
+
+            save_block_1_ptr = self._read_u32(self.addresses.SAVE_BLOCK1_PTR)
+            if save_block_1_ptr == 0:
+                self._rate_limited_warning("SaveBlock1 pointer is null", "saveblock_pointer")
+                return None
+
+            var_index = var_id - self.addresses.VARS_START
+            if not (0 <= var_index < self.addresses.SAVE_BLOCK1_VARS_COUNT):
+                return None
+
+            var_addr = save_block_1_ptr + self.addresses.SAVE_BLOCK1_VARS_OFFSET + (var_index * 2)
+            return self._read_u16(var_addr)
+        except Exception as e:
+            logger.warning(f"Failed to read var {hex(var_id)}: {e}")
+            return None
 
     def get_game_progress_context(self) -> Dict[str, Any]:
         """Get context about game progress for better dialog understanding"""

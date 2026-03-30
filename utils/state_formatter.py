@@ -1354,6 +1354,8 @@ def get_movement_preview(state_data):
                     tile_description = 'Wall'
                 elif tile_symbol == 'W':
                     tile_description = 'Water'
+                elif tile_symbol == '?':
+                    tile_description = 'Gate zone - verify walkability from game view'
                 else:
                     tile_description = f'Tile ({tile_symbol})'
 

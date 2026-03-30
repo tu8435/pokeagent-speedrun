@@ -467,7 +467,7 @@ def get_symbol_legend():
         "PC": "PC/Computer",
         "T": "Television",
         "B": "Bookshelf", 
-        "?": "Unexplored area",
+        "?": "Gate zone (verify walkability from game view)",
         "F": "Flowers/Plants",
         "C": "Counter/Desk",
         "=": "Bed",

@@ -4,7 +4,7 @@ Shared utilities grouped by subsystem: mapping, data persistence, agent infrastr
 
 ## mapping/
 
-Map and pathfinding: `ascii_map_loader`, `map_formatter`, `map_stitcher`, `map_stitcher_singleton`, `pathfinding`, `pokeemerald_parser`, `porymap_json_builder`, `porymap_state`. Used to build the current map view and movement preview for the agent. `state_formatter.py` at the top level re-exports from `utils.mapping.porymap_state` and formats game state for the LLM.
+Map and pathfinding: `ascii_map_loader`, `dynamic_map_overlay` (allowlisted live WRAM metatiles vs static Porymap for maps like Mauville Gym), `map_formatter`, `map_stitcher`, `map_stitcher_singleton`, `pathfinding`, `pokeemerald_parser`, `porymap_json_builder`, `porymap_state`. Used to build the current map view and movement preview for the agent. `state_formatter.py` at the top level re-exports from `utils.mapping.porymap_state` and formats game state for the LLM. See `System-Design/README.md` for overlay wiring.
 
 ## data_persistence/
 

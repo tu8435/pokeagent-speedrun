@@ -45,7 +45,7 @@ For module-level detail, see the README in each area:
 - **[pokemon_env/README.md](pokemon_env/README.md)** — Emulator, memory reader, Porymap map data.
 - **[utils/README.md](utils/README.md)** — Mapping, persistence, VLM backends, metrics.
 
-Optional maintainer notes: **`System-Design/README.md`** (folder is often gitignored; create locally if missing).
+Maintainer architecture notes: **[System-Design/README.md](System-Design/README.md)** (dynamic map overlay, integration points).
 
 ## Features
 
@@ -56,7 +56,7 @@ Optional maintainer notes: **`System-Design/README.md`** (folder is often gitign
 - **MCP support**: External CLI agents (Claude Code/Codex CLI/Gemini CLI) interact with the game via `pokemon_mcp_server.py`. Containerization limits non-tool HTTP to the game server. The HTTP game server does **not** implement local subagents such as `subagent_reflect`; CLI agents use a reduced MCP surface (see `server/cli/pokemon_mcp_server.py`).
 - **Checkpoints & backups**: Save/resume runs; backups in `backups/`; analysis data in `run_data/`. Backups restore **disk** state under `.pokeagent_cache/` (objectives, long-term memory, checkpoint, trajectories file if present, etc.), not the agent’s in-memory short-term conversation window—see [utils/README.md](utils/README.md) (`data_persistence`).
 - **Metrics & logging**: Per-step and cumulative tokens, cost, actions, as well as run initialization settings are found in .pokeagent_cache/{run_id}/cumulative_metrics.json; LLM logs (llm_logs/) and other session logs are also tracked, though cumulative_metrics is the single source of truth. One-step local subagents (reflect, verify, summarize, gym puzzle) record a synthetic `tool_calls` row on their step so the interaction name is visible next to token usage (they do not invoke MCP tools).
-- **Map system**: Porymap integration, NPC display, movement preview, portal tracking
+- **Map system**: Porymap integration, NPC display, movement preview, portal tracking. For allowlisted maps (e.g. Mauville Gym), a **live metatile overlay** reconciles static decomp grids with WRAM when scripts change tiles at runtime; see [System-Design/README.md](System-Design/README.md).
 - **Web interface**: Real-time stream at `http://localhost:8000/stream` by default. The port can be manually specified via the --port flag to both run.py and run_cli.py
 - **Video recording**: Optional MP4 recording of gameplay saved to `run_data/{run_id}/end_state/videos/`
 - **Customizable prompts**: Edit prompt assets under `agents/prompts/` to directly steer agent behavior.
@@ -87,8 +87,9 @@ pokeagent-speedrun/
 │   ├── objectives/           # Direct objectives, types, categorization
 │   └── prompts/              # Canonical prompt assets and path helpers
 ├── utils/
-│   ├── mapping/              # ascii_map_loader, map_formatter, map_stitcher, map_stitcher_singleton,
-│   │                          # pathfinding, pokeemerald_parser, porymap_json_builder, porymap_state
+│   ├── mapping/              # ascii_map_loader, dynamic_map_overlay, map_formatter, map_stitcher,
+│   │                          # map_stitcher_singleton, pathfinding, pokeemerald_parser,
+│   │                          # porymap_json_builder, porymap_state
 │   ├── data_persistence/     # backup_manager, run_data_manager, llm_logger
 │   ├── agent_infrastructure/ # cli_agent_backends, vlm_backends
 │   ├── metric_tracking/      # session readers (claude, gemini, codex), server_metrics

@@ -6,8 +6,9 @@
 *.log
 
 
-# Untracked internal docs/tools
-System-Design/
+# Untracked internal docs/tools (track System-Design/README.md only)
+System-Design/*
+!System-Design/README.md
 scripts/
 
 # Runtime and outputs

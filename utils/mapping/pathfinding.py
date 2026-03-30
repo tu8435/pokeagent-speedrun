@@ -338,12 +338,13 @@ class Pathfinder:
                 }
 
                 # Include raw tiles with elevation if available
-                # Raw tiles are needed for elevation checking
                 if "raw_tiles" in porymap:
                     result["raw_tiles"] = porymap["raw_tiles"]
                 elif "tiles" in map_data:
-                    # Fallback: check if tiles are in map_data directly
                     result["raw_tiles"] = map_data["tiles"]
+
+                if "fortree_gate_orientations" in porymap:
+                    result["fortree_gate_orientations"] = porymap["fortree_gate_orientations"]
 
                 return result
 
@@ -824,7 +825,7 @@ class Pathfinder:
         # which already handled elevation connectivity. This allows pathfinding through
         # ladders and slopes that connect different elevations.
         # ========================================================================
-        walkable_symbols = [".", "~", "S", "D", "←", "→", "↑", "↓", "&"]
+        walkable_symbols = [".", "~", "S", "D", "←", "→", "↑", "↓", "&", "?"]
         both_walkable = from_symbol in walkable_symbols and dest_symbol in walkable_symbols
 
         # Skip elevation blocking if both tiles are walkable - trust the filtered grid
@@ -1115,6 +1116,27 @@ class Pathfinder:
                     return False
             elif dest_symbol == "↙":  # JUMP_SOUTHWEST
                 if dx >= 0 or dy <= 0:  # Must move west AND south
+                    return False
+
+        # Fortree Gym rotating-gate edge constraint
+        orientations = map_data.get("fortree_gate_orientations")
+        if orientations is not None:
+            from utils.mapping.dynamic_map_overlay import fortree_movement_blocked, DIR_NORTH, DIR_SOUTH, DIR_WEST, DIR_EAST
+
+            if dx == 0 and dy == -1:
+                direction = DIR_NORTH
+            elif dx == 0 and dy == 1:
+                direction = DIR_SOUTH
+            elif dx == -1 and dy == 0:
+                direction = DIR_WEST
+            elif dx == 1 and dy == 0:
+                direction = DIR_EAST
+            else:
+                direction = None
+
+            if direction is not None:
+                grid = map_data.get("grid", [])
+                if fortree_movement_blocked(direction, to_x, to_y, orientations, grid):
                     return False
 
         return True

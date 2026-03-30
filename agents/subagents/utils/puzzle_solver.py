@@ -66,26 +66,31 @@ Use memory to write notes about which geysers led where and any possible routes 
         "strategy": """Fortree Gym rotating door (turnstile) puzzle solution:
 
 === HOW THE ROTATING GATES WORK ===
-Each gate looks like a + or X shape with 4 arms radiating from a center pivot.
-- You can ONLY walk through the OPEN sides (gaps between arms)
-- When you walk through, the ENTIRE gate rotates 90° CLOCKWISE
-- The arms that were blocking LEFT/RIGHT will now block UP/DOWN (and vice versa)
+Each gate has arms radiating from a center pivot.
+- Walking into an arm pushes the gate, rotating it 90° if the sweep path is clear.
+- If a wall or pillar blocks the sweep, the gate CANNOT rotate and you are blocked.
+- Gates create DIRECTIONAL barriers: a tile may be reachable from one direction
+  but not another. The map marks gate zones with '?' to flag this uncertainty.
 
-VISUAL GUIDE - Gate States:
-State A (blocks left/right):    State B (blocks up/down):
-    |                               -+-
-   -+-                               |
-    |
+=== PATHFINDING SUPPORT ===
+The pathfinder accounts for gate orientation and rotation constraints, so
+navigate_to will usually find a valid path through gates when one exists.
+However, pathfinding is NOT perfect for this puzzle because:
+- Gate orientations change as the player walks through them, but pathfinding
+  only sees the current snapshot.
+- Multi-step gate manipulation (rotate gate A to open path to gate B) requires
+  planning beyond single-path A*.
 
-Walking through State A (entering from top or bottom) rotates it to State B.
-Walking through State B (entering from left or right) rotates it to State A.
+USE navigate_to as a first attempt, but if it fails or produces a partial path,
+fall back to manual movement: inspect the game view, identify which gate arms
+block your path, and step through gates strategically to rotate them.
 
 === ROTATION RULE ===
 ALWAYS rotates CLOCKWISE when you pass through:
-- Enter from SOUTH (walking UP) → The gate rotates so the arm that was pointing SOUTH now points WEST
-- Enter from NORTH (walking DOWN) → The gate rotates so the arm that was pointing NORTH now points EAST
-- Enter from WEST (walking RIGHT) → The gate rotates so the arm that was pointing WEST now points NORTH
-- Enter from EAST (walking LEFT) → The gate rotates so the arm that was pointing EAST now points SOUTH
+- Enter from SOUTH (walking UP) → arm pointing SOUTH now points WEST
+- Enter from NORTH (walking DOWN) → arm pointing NORTH now points EAST
+- Enter from WEST (walking RIGHT) → arm pointing WEST now points NORTH
+- Enter from EAST (walking LEFT) → arm pointing EAST now points SOUTH
 
 === STRATEGY ===
 Since gates reset when you leave and re-enter the gym, you must solve it in one go:
@@ -103,11 +108,11 @@ General path:
 5. Eventually reach the upper platforms
 6. Navigate to Winona at the back
 
-IMPORTANT: When you see a gate blocking your path:
-- Check which directions the arms are pointing
-- If arms block UP/DOWN, you can pass LEFT/RIGHT
-- If arms block LEFT/RIGHT, you can pass UP/DOWN
-- After passing, the arms will rotate 90° clockwise
+IMPORTANT: When you see a '?' tile on the map:
+- This is a gate interaction zone with conditional walkability.
+- Check the game view to see which directions the arms are pointing.
+- If arms block your direction, try approaching from a different side.
+- After passing through, the arms rotate 90° clockwise.
 
 Trainer locations to defeat:
 - Humberto: (4, 23)
