@@ -18,7 +18,7 @@ Different maps have different runtime-collision mechanisms. A single “read liv
 Only a small set of locations opt in. Uppercase ROM location names are keys in `DYNAMIC_MAP_OVERLAYS` in `utils/mapping/dynamic_map_overlay.py`.
 
 - `MAUVILLE CITY GYM` -> live metatile overlay strategy
-- `FORTREE CITY GYM` -> rotating-gate var-driven overlay strategy
+- `FORTREE CITY GYM` -> gate-zone `?` markers + orientations for pathfinding (see [implementation gaps — Fortree](architecture/implementation_gaps.md#4-fortree-city-gym-rotating-gates-vs-2d-map-representation))
 
 ### Data flow
 
@@ -34,11 +34,10 @@ Only a small set of locations opt in. Uppercase ROM location names are keys in `
   - Rebuilds symbols via `format_tile_to_symbol`.
   - Replaces `grid`, `raw_tiles`, and `ascii` (when present).
 
-- **Rotating-gate strategy (Fortree):**
-  - Reads gate orientation bytes from `VAR_TEMP_0..VAR_TEMP_3` via `memory_reader.read_var(var_id)`.
-  - Fortree has 8 gates, so 8 bytes packed into those 4 temp vars.
-  - Uses upstream Fortree gate config (pivot coordinates + shapes) and arm-layout tables (T1/T2/L4).
-  - Projects current orientation into blocked cells and applies extra directional blocking based on rotating-gate collision rules.
+- **Fortree (partial / prototype):**
+  - Reads gate orientation bytes from `VAR_TEMP_0..VAR_TEMP_3` via `memory_reader.read_var(var_id)` (8 gates packed into 4 words).
+  - Marks each gate’s interaction zone with `?` on the grid so the agent is nudged to confirm walkability from the game view.
+  - Stores `fortree_gate_orientations` on the porymap payload; pathfinding applies an edge constraint in `_can_move_to` (`fortree_movement_blocked`). This is **not** a full tile-level model of arms (see [implementation gaps](architecture/implementation_gaps.md#4-fortree-city-gym-rotating-gates-vs-2d-map-representation)).
 
 ### Key APIs (`dynamic_map_overlay.py`)
 
