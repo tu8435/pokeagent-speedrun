@@ -4,7 +4,25 @@
 
 \appendix
 
-\tersoo{IMPORTANT NOTE: THE FIRST ANCILLIARY SECTION SHOULD GO OVER ALL RELEVANT POKEMON/SPEEDRUNNING TERMS RELEVANT TO THIS PAPER FOR THE UNINITIATED}
+\section{Glossary of Terms}\label{sec:appendix_glossary}
+
+The following terms from Pok\'{e}mon and the speedrunning community are used throughout this thesis.
+
+\begin{description}[style=nextline, leftmargin=2em]
+\item[Badge] A collectible earned by defeating a Gym Leader. Badges unlock the use of specific HM moves outside of battle and gate access to later portions of the game. Pok\'{e}mon Emerald has eight Badges.
+\item[Gym / Gym Leader] A facility in a major city where the player battles a leader specializing in a particular Pok\'{e}mon type. Gyms often contain spatial puzzles and mandatory trainer battles that must be cleared before the leader can be challenged.
+\item[HM (Hidden Machine)] A permanent move-teaching item (e.g., Cut, Surf, Flash) required for overworld progression. A Pok\'{e}mon that knows an HM move can use it outside of battle to clear obstacles or traverse terrain, but only after the corresponding Badge has been obtained.
+\item[TM (Technical Machine)] A single-use (in Generation~III) or reusable (later generations) item that teaches a Pok\'{e}mon a specific battle move. TMs are optional but strategically valuable.
+\item[Type / Type Effectiveness] Each Pok\'{e}mon and move has one or two types (Fire, Water, Grass, etc.). Damage is scaled by type matchups: super-effective ($2\times$), not very effective ($0.5\times$), or immune ($0\times$).
+\item[Wild Encounter] A random battle triggered by walking through tall grass, surfing, or entering caves. Wild encounters are not mandatory but provide experience points and capture opportunities.
+\item[Trainer Battle] A scripted battle against an NPC trainer that triggers when the player enters their line of sight. Trainer battles cannot be fled from and provide experience and money.
+\item[Starter Pok\'{e}mon] The first Pok\'{e}mon the player receives. In Emerald, the choice is Treecko (Grass), Torchic (Fire), or Mudkip (Water). The starter's type affects early-game difficulty.
+\item[Milestone] A discrete, verifiable checkpoint in the speedrun defined by a game-state predicate (e.g., ``Badge~1 obtained,'' ``arrived in Rustboro City''). Milestones partition the run into segments for quantitative evaluation.
+\item[Split] A contiguous sequence of gameplay between two consecutive milestones. Splits are the atomic unit of timing in speedrun analysis.
+\item[Tutorial Setting] The evaluation scope covering the game from the opening (Littleroot Town) through the first Gym (Roxanne in Rustboro City), spanning approximately 15 milestones.
+\item[Long-Horizon Setting] The extended evaluation scope from the opening through Gym~3 (Wattson in Mauville City), spanning many more milestones and introducing HM dependencies, ferry travel, and multi-objective routing.
+\item[Pok\'{e}dex] An in-game encyclopedia that records information on Pok\'{e}mon the player has seen or caught. Receiving the Pok\'{e}dex from Professor Birch is an early milestone.
+\end{description}
 
 \section{Environment and System Details}\label{sec:appendix_environment}
 
@@ -24,15 +42,15 @@ The server architecture is designed for extensibility in harness design. New MCP
 
 The structured text state that agents receive (Section~\ref{sec:agent_perspective}) is assembled from two complementary data sources: real-time memory reading and pre-parsed map data from the \texttt{pokeemerald} decompilation project.
 
-\paragraph{Memory Reading.} The memory reader directly accesses GBA RAM addresses to extract game state without relying on visual parsing. Key data includes: the player's position coordinates (from the player object at \texttt{0x03005D8C}), the current map bank and number (resolved to a human-readable location name via an enumeration table), the player's Pok\'{e}mon party (6 slots of 100-byte structures starting at \texttt{0x020244EC}, each containing species, level, HP, status conditions, moves, and PP), the bag inventory (organized into items, key items, Pok\'{e} Balls, TMs, and berries), the game state register (distinguishing overworld, dialog, battle, and menu states), badge flags, and access to a number of variables like the amount of money the player has or the number of pokemon recorded in their Pok\'{e}dex. Memory reading is most important when reasoning about what game state the agent should have access to or for defining milestone completion flags from ground-truth.
+\paragraph{Memory Reading.} The memory reader directly accesses GBA RAM addresses to extract game state without relying on visual parsing. Key data includes: the player's position coordinates, the current map bank and number, the player's Pok\'{e}mon party, each containing species, level, HP, status conditions, moves, and PP), the bag inventory (organized into items, key items, Pok\'{e} Balls, TMs, and berries), the game state register (distinguishing overworld, dialog, battle, and menu states), badge flags, and access to a number of variables like the amount of money the player has or the number of pokemon recorded in their Pok\'{e}dex. Memory reading is most important when reasoning about what game state the agent should have access to or for defining milestone completion flags from ground-truth.
 
 \paragraph{Porymap Supplementation.} Raw memory reading provides tile-level map data (metatile IDs, collision flags, elevation), but this information is difficult for an LLM to interpret without semantic context. We supplement memory-read map data with pre-parsed layouts from the \texttt{pokeemerald} decompilation project, processed through Porymap~\citep{huderlem2025porymap}. This supplementation provides simple access to several critical enrichments: NPC positions and types (trainers, shopkeepers, quest-givers), object event locations (items, hidden items, interactive objects), warp coordinates with their destination map and coordinates (enabling the agent to know where doors, stairs, and cave entrances lead), and metatile behavior annotations that classify tiles by function (walkable, surfable, climbable, etc.).
 
-The impact on agent performance is direct: without porymap data, agents must infer spatial structure purely from visual observation and trial-and-error navigation. With porymap data, the agent receives an ASCII map grid with semantically meaningful symbols (\texttt{.}~for walkable, \texttt{\#}~for walls, \texttt{D}~for doors, \texttt{N}~for NPCs, \texttt{I}~for the player) and a list of known portal coordinates with destination names. Importantly, by providing a global-view of the current map location, beyond what the agent can see in the visual frame, the inclusion of Porymap data represents a fundamental aspect of our Environment Design which keeps the process of navigation challenging, but doable. This data is also a prerequisite for the pathfinding tool we implement that serves as one of the most valuable and frequently called MCP tools in our expert harness \tersoo{NOTE: we should be consistent in when we use H-auto, H-expert, H-min vs 'expert harness' 'minimal harness etc.}.
+The impact on agent performance is direct: without porymap data, agents must infer spatial structure purely from visual observation and trial-and-error navigation. With porymap data, the agent receives an ASCII map grid with semantically meaningful symbols (\texttt{'.'}~for walkable, \texttt{'\#'}~for walls, \texttt{'D'}~for doors, \texttt{'N'}~for NPCs, \texttt{P}~for the player) and a list of known portal coordinates with destination names. Importantly, by providing a global-view of the current map location, beyond what the agent can see in the visual frame, the inclusion of Porymap data represents a fundamental aspect of our EAE which keeps the process of navigation challenging, but doable. This data is also a prerequisite for the pathfinding tool, one of the most valuable and frequently called MCP tools in $\mathcal{H}_{\text{expert}}$ (Section~\ref{sec:harness_spectrum}) and is important for the generation of code skills used for navigation by $\mathcal{H}_{\text{auto}}$.
 
 \subsection{Walkthrough: Tutorial (Littleroot to Roxanne)}\label{sec:appendix_tutorial_walkthrough}
 
-The tutorial evaluation spans 15 milestones \tersoo{NOTE: this list doesnt track the exact 15 milestones perfectly, so i removed the enumeration. Please reference the figure with the tutorial milestones}, each testing a distinct combination of agent competencies. We describe the progression and the capabilities each segment exercises, referencing the open Pok\'{e}mon Emerald walkthrough~\citep{bulbapedia2025walkthrough} as a canonical game guide.
+The tutorial evaluation spans 15 milestones (see Figure~\ref{fig:ch3_speedrun_route} for the complete list), each testing a distinct combination of agent competencies. We describe the progression and the capabilities each segment exercises, referencing the open Pok\'{e}mon Emerald walkthrough~\citep{bulbapedia2025walkthrough} as a canonical game guide.
 
 \textbf{Littleroot Town} (Start). The agent begins in a moving truck outside of their house in Littleroot Town. The specific location of the house is dependent on their selected gender, though our benchmark defaults to the male character, "Brendan" for all evaluations. The player must then walk into their bedroom, set their clock, before navigating downstairs, talking to their mother, exiting the house, and walk to the neighboring house.
 
@@ -269,7 +287,6 @@ Table~\ref{tab:tool_defs} provides brief descriptions of all MCP tools exposed b
 
 \textit{[To be written. Representative system prompts, base prompts, and evolution outputs across experimental conditions.]}
 
-\section{Gameplay Demonstrations}\label{sec:appendix_gameplay}
 
 \textit{[To be written. Selected trajectory excerpts illustrating agent behavior across different harness configurations. Annotated reasoning traces.]}
 
@@ -279,16 +296,130 @@ Table~\ref{tab:tool_defs} provides brief descriptions of all MCP tools exposed b
 
 \section{Engineering Standards}\label{sec:appendix_engineering_standards}
 
-Per the ECE Department's Independent Work and Thesis Handbook, this section identifies the engineering standards and broadly accepted industrial conventions used in this thesis.
+This section identifies the engineering standards and broadly accepted industrial conventions incorporated in this thesis.
 
-\textit{[To be completed. The following categories should be addressed with specific standards, tools, and their role in the project:]}
+\subsection{Programming Languages and Tools}
 
-\begin{itemize}
-    \item \textbf{Software frameworks and libraries.} \textit{[e.g., Python 3.x, FastAPI, mGBA emulator SDK, Google Generative AI SDK, NumPy. Describe role of each in the system.]}
-    \item \textbf{Communication protocols.} \textit{[e.g., HTTP/REST for agent--server communication, WebSocket for frame streaming, Model Context Protocol (MCP) for tool integration. Cite relevant specifications.]}
-    \item \textbf{Data formats and serialization.} \textit{[e.g., JSON for structured state representation and tool call/response payloads, PNG for frame capture, BibTeX for bibliography management.]}
-    \item \textbf{Evaluation methodology.} \textit{[e.g., wall-clock timing standards, milestone-based progress metrics, token counting conventions, cost estimation methodology.]}
-    \item \textbf{Reproducibility and open-source practices.} \textit{[e.g., version control (Git), open-source licensing, public benchmark release, documentation standards.]}
-    \item \textbf{Security and sandboxing.} \textit{[e.g., restricted built-in functions in the code execution sandbox, process-local isolation for agent-generated code.]}
-    \item \textbf{Game emulation.} \textit{[e.g., mGBA emulator accuracy standards, GBA hardware specifications ($240 \times 160$ resolution, ARM7TDMI processor), ROM integrity verification.]}
+\begin{itemize}[nosep]
+\item \textbf{Python (PSF).} All agent, server, and benchmark code is written in Python~3.11+, following PEP~8 style conventions enforced via automated linting.
+\item \textbf{\LaTeX{} (Leslie Lamport, 1984).} This thesis and all associated publications are typeset using \LaTeX{}, the standard document preparation system for scientific and technical writing.
+\item \textbf{Cursor IDE (Anysphere, Inc.).} AI-assisted software development was conducted using the Cursor IDE, which provides integrated access to frontier language models for code generation, editing, and debugging.
 \end{itemize}
+
+\subsection{Communication Protocols}
+
+\begin{itemize}[nosep]
+\item \textbf{HTTP/REST (IETF RFC~7230--7235).} The game server exposes its API over HTTP following REST conventions, with JSON request and response bodies.
+\item \textbf{WebSocket (IETF RFC~6455).} Real-time frame streaming from the emulator to the browser-based visualization interface uses the WebSocket protocol for persistent, bidirectional communication.
+\item \textbf{JSON (ECMA-404, ISO/IEC~21778:2017).} All structured data exchange between agent, server, and persistent stores uses JavaScript Object Notation (JSON).
+\item \textbf{Model Context Protocol (MCP) (Anthropic / Linux Foundation).} The agent-server interface follows the MCP open standard for tool discovery and invocation, enabling modular harness design as described in Section~\ref{sec:mcp_background}.
+\end{itemize}
+
+\subsection{Emulation and Platform Standards}
+
+\begin{itemize}[nosep]
+\item \textbf{mGBA (open-source, endrift).} Game Boy Advance emulation uses the mGBA emulator, which provides cycle-accurate emulation of the ARM7TDMI processor and GBA hardware. The emulator renders frames at the native $240 \times 160$ pixel resolution.
+\end{itemize}
+
+\subsection{Units of Measurement}
+
+All timing measurements (wall-clock duration, completion times) are reported in SI units (seconds, minutes, hours). Token counts and step counts are reported as dimensionless integers. API costs are reported in United States dollars (USD).
+
+% Legacy reference material from ECE department example below (retained as comment).
+% A (non-exhaustive) example list of engineering standards and broadly
+% accepted industrial conventions that could potentially be utilized in
+% various ECE Senior Thesis projects:
+% • Standardized modeling conventions
+% o Standardized hardware/circuit/PCB modeling conventions (e.g.
+% Verilog (IEEE 1364), Cadence software is using standardized electrical
+% symbols ANSI Y32.2-1975, standardized footprints IPC-7351B)
+% o Standardized CAD drawings (e.g. SolidWorks software uses ISO and
+% ANSI standards)
+% • International units of physical quantities
+% o International System of Units (SI)
+%  SI units: meter (m), second (s), mole (mole), ampere (A),
+% kelvin (K), candela (cd), kilogram (kg);
+%  defining constants: c: the speed of light in vacuum, h: the
+% Planck constant, e: elementary charge, k: the Boltzmann
+% constant, NA: the Avogadro constant, Kcd: the luminous efficacy
+% of monochromatic radiation; ∆νCs: the hyperfine transition
+% frequency of cesium-133;
+%  SI derived units such as : coulomb (C), Celsius (°C), farad (F),
+% henry (H), hertz (Hz), joule (J), lumen (lm), lux (lx), newton
+% (N), ohm (Ω), pascal (Pa), radian (rad), siemens (S), sievert
+% (Sv), steradian (sr), tesla (T), volt (V), watt (W), weber (Wb)
+% o centimetre–gram–second (CGS) system of units
+%  Example CGS units in use : maxwell (Mx), gauss (G), erg (erg),
+% o Other commonly accepted industrial units: bar, millimetre of mercury,
+% torr, millimetre of water, etc.
+% • Programming languages and programming practices
+% o C++ (SO/IEC 14882)
+% o Fortran (ISO/IEC 1539)
+% o JavaScript (ECMA-262)
+% o SQL (ISO/IEC 9075:2016)
+% o Other commonly accepted industrial programming languages and
+% tools: Java, Python, TensorFlow, Keras, R., Matlab, Pytorch,
+% Mathematica, LaTeX
+% • Communication (hardware, protocols, and algorithms)
+% o Buses and protocols (e.g. Ethernet (IEEE 802.3), Bluetooth (IEEE
+% 802.15.1), USB, SATA, UART, RS-232, PCIe, WiFi (IEEE 802.11),
+% ZigBee (IEEE 802.15.4), BGP (RFC standards), RFID (multiple
+% standards e.g. ISO/IEC 14443), GPIB (IEEE 488), Medium access
+% control- MAC e.g. TDMA, FDMA, CDMA, ALOHA, Pure ALOHA, CSMA
+% (IEEE 802), IP protocols e.g, IPv4, IPv6 (RFC 8200 – Internet 
+% Standard), quantum key distribution (NIST BB84, or scientific E91
+% protocol)…)
+% o Communication/configuration (OSI (Open Systems Interconnection
+% model): Physical layer, Data link layer, Network layer, Transport
+% Layer, Session Layer, Presentation Layer, Application layer (ISO/IEC
+% 7498); LTE/GSM/UMTS/EDGE including modulation techniques such
+% as PSK/FSK/ASK/QAM et. (standardized by ITU), RAID (standardized
+% by SNIA)…etc.
+% o Coding, compression, algorithms (MFCC – standardized by ETSI;
+% JPEG/MPEG (ISO/IEC JTC 1/SC 29)…)
+% o Radio/microwave/optical spectrum (e.g. IEEE bands (HF, VHF, UHF, L,
+% S, C…), radar standards (e.g., IEC 60945, IEC 62388), optical fiber
+% communication WDM bands(ITU-T standards)…)
+% o Commonly accepted security standards and protocols: Transport
+% Layer Security (TLS), AES encryption standard, RSA protocol
+% o Industry-wide accepted file standards: (.png, .pdf, .txt, .csv, .jpeg, .mp4,
+% .tiff, .eps…etc.)
+% o Other commonly accepted open industrial standards: Low Power
+% Wide Area Networks – LPWAN (LoRaWAN® open standard),
+% • Robotics/ML/AI based theses
+% o Artificial Intelligence related standards (ISO/IEC JTC 1/SC 42
+% Technical Committee)
+% o Road vehicle test maneuvers (ISO 3888, SAE J266)
+% o Open source software: ROS (Robot Operating System)
+% o Open datasets and benchmark datasets: ImageNet, CIFAR (benchmark
+% datasets for image classification), MNIST (benchmark dataset for
+% optical character recognition), MIMIC (dataset for ICM management),
+% Human cell atlas (www.humancellatlas.org) , covid atlas
+% (https://covidatlas.com/ )
+% • Other
+% o Randomness tests (NIST SP 800-22, or other established standards
+% like DIEHARD)
+% o Color conventions (RGB (CIE1931), CMYK, CIELAB etc.) 
+% (EXAMPLE APPENDIX)
+% Appendix: Engineering and Industrial Standards
+% The independent project described in this thesis incorporated the following
+% engineering and industrial standards:
+% • Standardized modeling conventions
+% o Standardized circuit/PCB modeling conventions: Cadence software
+% (standardized electrical symbols ANSI Y32.2-1975, standardized
+% footprints IPC-7351B)
+% Cadence software package adhering to ANSI standards was used to design and
+% simulate mixed-signal circuits and perform PCB design for this project.
+% • International units of physical quantities
+% o International System of Units (SI)
+% SI units were used throughout the thesis.
+% • Programming languages
+% o C++ (SO/IEC 14882)
+% A custom C++ code was developed to control the designed hardware via Arduino
+% microcontroller.
+% • Communication (hardware, protocols, and algorithms)
+% o Buses and protocols: Bluetooth (IEEE 802.15.1), UART,
+% UART serial communication was used to establish communication between the PC
+% and Arduino microcontroller, while Bluetooth standard was used to communicate
+% with sensor data to an Android smartphone.}
+

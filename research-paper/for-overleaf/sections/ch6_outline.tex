@@ -20,6 +20,10 @@
    (Claude Code, Gemini CLI) show promise but lack the operational granularity needed for
    reliable navigation and multi-phase quest management.}
 
+\subsubsection{Harness Isolation and Ablation}\label{sec:harness_isolation}
+
+\textit{[To be written. As noted in Section~\ref{sec:harness_spectrum}, $\mathcal{H}_{\min}$ and $\mathcal{H}_{\text{expert}}$ share primitive access to subagents, memory, and skills; they differ in what is pre-built rather than in fundamental capability. Developing a more strictly isolated minimal baseline, where runtime accumulation of these components is disabled, would enable cleaner ablation studies and sharpen the attribution of performance to human-engineered initialization versus automated discovery.]}
+
 \subsubsection{Model Distillation}\label{sec:distillation}
 
 \textit{[To be written. Training open-source models on a harness learned by a more powerful model; teacher-model paradigm via AutoEvolve; implications for industry.]}
@@ -31,3 +35,11 @@
 \subsubsection{Extensions to Other Domains}\label{sec:extensions}
 
 \textit{[To be written. Generalization of AutoEvolve to coding, robotics, and other embodied/agentic domains.]}
+
+\subsubsection{Meta-Harness Research}\label{sec:meta_harness_future}
+
+\textit{[To be written. The emerging field of automated harness construction represents a parallel line of research that complements and extends the contributions of this thesis. The Darwin G\"{o}del Machine (DGM)~\citep{zhang2025dgm} demonstrated open-ended evolution of self-improving coding agents through quality-diversity optimization, improving SWE-bench performance from 20.0\% to 50.0\%. Meta-Harness~\citep{lee2026metaharness} automated harness optimization by providing a coding agent with up to 10 million tokens of diagnostic context per optimization step, demonstrating a $6\times$ performance gap through harness optimization alone. These approaches operate across independent evaluation episodes and in textual environments; extending them to the online, embodied, reset-free regime explored by AutoEvolve is a natural direction for future work.]}
+
+\subsubsection{Recursive Language Model Directions}\label{sec:rlm_future}
+
+\textit{[To be written. The Recursive Language Model (RLM) framework~\citep{zhang2025rlm} provides a theoretical foundation for agents that programmatically interact with and restructure their own context during inference. The structured trajectory window in our expert harness and the segment-level optimization in AutoEvolve can both be understood as instances of recursive context management. Formalizing these connections and developing RLM-aware training objectives that explicitly optimize for context-management quality is a promising direction that could yield agents with stronger long-horizon coherence.]}

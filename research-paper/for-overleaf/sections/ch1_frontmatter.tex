@@ -6,41 +6,59 @@
 % Title, author, date, and adviser are rendered by \maketitle in main.tex.
 % The following statement is required by the ECE department.
 
-\vspace{2em}
+\vspace{4em}
 \begin{center}
-\textit{Submitted in partial fulfillment\\
+Submitted in partial fulfillment\\ 
+\vspace{1em}
 of the requirements for the degree of\\
+\vspace{1em}
 Bachelor of Science in Engineering\\
+\vspace{1em}
 Department of Electrical and Computer Engineering\\
-Princeton University}
+\vspace{1em}
+
+Princeton University
 \end{center}
 
 \newpage
 
 % --- Page 2: Declaration ---
-
-\section*{Declaration}
-
-I hereby declare that this Independent Work report represents my own work in accordance with University regulations.
-
-\vspace{1em}
-\noindent I hereby declare that this Independent Work report \textbf{does not} include regulated human subjects research.
-
-\vspace{1em}
-\noindent I hereby declare that this Independent Work report \textbf{does not} include regulated animal subjects research.
+\begin{center}
+\vspace{5em}
+I hereby declare that this Independent Work report\\ represents my own work in accordance with University\\ regulations.
 
 \vspace{2em}
-\noindent\includegraphics[height=3em]{signature.png}\\
+
+I hereby declare that this Independent Work report \\
+does not include regulated human subjects research.
+
+\vspace{2em}
+
+I hereby declare that this Independent Work report \\ does not include regulated animal subjects research.
+
+\vspace{2em}
+
+\includegraphics[height=3em]{signature.png}\\
 \noindent\rule{0.45\textwidth}{0.4pt}\\
+\vspace{1em}
 Tersoo R.\ Upaa Jr
+\end{center}
+
+
+\vspace{2em}
+
+
 
 \newpage
 
 % --- Page 3: Abstract ---
 
 \begin{abstract}
-\textbf{[Abstract placeholder --- to be written after AutoEvolve experiments are complete.]}
+We present three contributions toward evaluating and improving vision-language model (VLM) agents in long-horizon, embodied settings. First, we introduce the \pokeagent{} Challenge Speedrunning Benchmark, a standardized evaluation framework built on Pok\'{e}mon Emerald that requires agents to sustain coherent reasoning across thousands of sequential decisions under partial observability and real-time execution. Originating as a NeurIPS 2025 competition, the benchmark defines milestone-based metrics, supports both tutorial and extended evaluation settings, and provides the infrastructure for reproducible comparison of agent systems. Second, we develop an expert agentic harness ($\mathcal{H}_{\text{expert}}$) that decomposes gameplay into a multi-agent orchestration system with purpose-built subagents, hierarchical persistent memory, a runtime skill library, and sandboxed code execution. Tracing the harness through three stages of development---from a minimal competition-era scaffold through an intermediate design to the current expert system---we identify the architectural decisions that most impact long-horizon performance. Third, we introduce AutoEvolve, an algorithm that begins from a minimal harness ($\mathcal{H}_{\min}$) and iteratively modifies its own system prompt, subagents, memory, skills, and tools through in-context evolutionary optimization over trajectory segments, without environment resets. We evaluate all three harness configurations across tutorial and long-horizon settings using frontier VLMs and report results on milestone completion, wall-clock time, action efficiency, and cost. Our findings demonstrate that harness design is a first-order variable in agent performance and that automated harness discovery can approach expert-level scaffolding.
 \end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:} Long-horizon Evaluation, Speedrunning Benchmark, Vision-Language Model, AI System, Embodied Agent, Meta-Harness,
 
 \newpage
 
@@ -48,13 +66,14 @@ Tersoo R.\ Upaa Jr
 
 \section*{Acknowledgments}
 
-I would like to give a special thanks to Seth Karten for his extensive contributions towards this project and for his mentorship throughout my senior year. Though no small feat, this project has greatly benefited from his support and attention.
+I would like to give a special thanks to Seth Karten for his extensive contributions towards this project and for his mentorship throughout my final year at Princeton. I've grown substantially in both technical ability and quality as a researcher through your guidance and support, in ways I could not have imagined a year ago; I am forever grateful.
 
-I would also like to thank Professor Chi Jin for his guidance and advising throughout the course of this thesis.
+
+To my family: thank you for your unwavering support throughout my time at Princeton and for encouraging me to pursue the things I care about, even when the path was not always clear. To my friends who tested early prototypes, endured my late-night debugging sessions, and reminded me that there is life outside the lab: this work is better because of you.
+
+This project began as a simple question---can an AI agent play a game I grew up loving?---and grew into something far more ambitious than I could have anticipated. Working at the intersection of reinforcement learning, language models, and game AI has been the most rewarding intellectual experience of my undergraduate career, and I am grateful to everyone who helped make it possible.
 
 Finally, I would like to thank SEAS and the ECE Department for their financial support.
-
-\textbf{[Flesh out with mention of family, friends, and personal relationship to the project.]}
 
 \newpage
 
@@ -68,7 +87,7 @@ Finally, I would like to thank SEAS and the ECE Department for their financial s
 
 \section*{Prelude}
 
-\textbf{[Personal prelude --- my history with Pok\'{e}mon, what this project means to me personally, what I hope this project can mean for more people in the future.]}
+\textbf{[Personal prelude --- my history with Pok\'{e}mon (got pokemon black as a video game for christmas when I was nine years old, found community through showdown and competitive pokemon, what this project means to me personally, what I hope this project can mean for more people in the future... Who would've thought my love for Pokemon would so neatly intersect with a work that embodies four long years of learning, trial, growth, and becoming. ]}
 
 \vspace{2em}
 \noindent\rule{\textwidth}{0.4pt}
